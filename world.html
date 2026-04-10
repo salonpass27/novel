@@ -520,73 +520,81 @@ window.addEventListener('touchstart', (e) => {
         .prompt-btn-skip { color: #52525b; } 
         .prompt-btn-skip:hover { color: #a1a1aa; }
 @media (max-width: 640px) {
-    /* 1. 處理 Modal 遮擋與溢出：確保內容永遠在視窗內，且可以滾動 */
+    /* 1. 讓故事視窗幾乎滿版，閱讀最舒服 */
     .story-modal {
-        width: 90vw !important;
-        height: auto !important;
-        max-height: 85vh !important; /* 留出頂部空間，避免被系統狀態列遮住 */
-        top: 50% !important;
-        left: 50% !important;
-        transform: translate(-50%, -50%) !important;
-        position: fixed !important;
-    }
-
-    /* 2. 閱讀區域 Padding 縮減：手機螢幕小，不需要太大的內距 */
-    .p-12 {
-        padding: 1.5rem !important; /* 原本 3rem 太大，手機會沒空間寫字 */
-    }
-
-    /* 3. 提示框 (Prompt) 避開角色：移到最上方，避免遮住地板或跳躍的小人 */
-    #readPrompt {
-        bottom: auto !important;
-        top: 10% !important;
-        left: 5% !important;
-        right: 5% !important;
-        width: 90% !important;
+        width: 95vw !important;
+        height: 90vh !important;
+        max-width: none !important;
+        max-height: none !important;
+        top: 5vh !important;
+        left: 2.5vw !important;
         transform: none !important;
-        padding: 1.25rem !important;
+        display: flex;
+        flex-direction: column;
     }
 
-    /* 4. 字體調整：防止標題太大導致換行遮住內容 */
-    h3 {
-        font-size: 1.1rem !important;
-        margin-bottom: 1.5rem !important;
-        line-height: 1.4 !important;
+    /* 2. 字體加大型：手機閱讀不需要瞇瞇眼 */
+    #readerModal p {
+        font-size: 1.1rem !important; /* 加大字體 */
+        line-height: 2.2 !important;
+        padding-bottom: 2rem;
     }
 
-    p {
-        font-size: 0.95rem !important;
-        line-height: 1.8 !important;
+    #readerModal h3 {
+        font-size: 1.4rem !important;
+        margin-top: 1rem !important;
+        margin-bottom: 2rem !important;
     }
 
-    /* 5. 確保按鈕不會被底部系統手勢列遮住 */
-    .story-modal button:last-child {
-        padding-top: 1rem !important;
-        padding-bottom: 1rem !important;
-        margin-bottom: 0px !important;
+    /* 3. 重新分配空間：減少內距，讓文字寬度最大化 */
+    .p-12 {
+        padding: 1.5rem !important; 
     }
 
-    /* 6. 存檔側欄 (Archive) 全屏修正 */
-    #archivePanel {
-        width: 100vw !important;
-        right: -100vw !important; /* 確保隱藏時完全出鏡 */
-        padding: 1rem !important;
-    }
-
-    /* 7. 修復長內容無法捲動的問題 */
+    /* 4. 滾動區域優化：確保按鈕永遠固定在底部，不會被擠走 */
     .novel-scroll {
+        flex-grow: 1;
         overflow-y: auto !important;
-        -webkit-overflow-scrolling: touch; /* 讓 iOS 捲動更順手 */
-        max-height: 60vh !important;
+        height: auto !important;
+        margin-bottom: 1rem;
     }
 
-    /* 8. 調整電腦版右上角的按鈕，避免手指太粗按不到 */
-    .writer-trigger {
-        width: 44px !important;
-        height: 44px !important;
-        background: rgba(255, 255, 255, 0.15) !important; /* 加強可見度 */
+    /* 5. 修正提示框 (Read Prompt)：讓它像手機通知一樣貼在頂部 */
+    #readPrompt {
+        top: 0 !important;
+        bottom: auto !important;
+        left: 0 !important;
+        width: 100vw !important;
+        border-left: none !important;
+        border-right: none !important;
+        border-top: none !important;
+        background: rgba(24, 24, 27, 0.95) !important; /* 帶一點透明感，隱約看得到角色 */
+        backdrop-filter: blur(5px);
+        padding: 2rem 1rem !important;
+        z-index: 200;
     }
-}    </style>
+
+    /* 6. 存檔與寫作按鈕：放在左右上角，加大感應範圍 */
+    .writer-trigger {
+        width: 50px !important;
+        height: 50px !important;
+        top: 80px !important; /* 往下移一點點，避開手機瀏海 */
+    }
+
+    /* 7. 修正輸入框高度：寫作時不要被虛擬鍵盤擋死 */
+    #writeContent {
+        height: 40vh !important;
+        font-size: 1rem !important;
+    }
+
+    /* 8. 修正底部按鈕：讓它夠大，好按 */
+    button.w-full {
+        height: 60px !important;
+        font-size: 14px !important;
+        letter-spacing: 0.2em !important;
+    }
+}
+    </style>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;700&display=swap" rel="stylesheet">
 </head>
 <body>
