@@ -2,7 +2,6 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>寂靜故事廊 - 輸送記憶</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="module">
@@ -265,49 +264,24 @@
 
         class Flower {
             constructor() {
-                // 🔹 判定是否為手機版
-                const isMobile = window.innerWidth <= 768;
-                this.isObstacle = isMobile;
-
                 this.x = canvas.width + 50;
                 const groundY = canvas.height * 0.88;
-
-                if (this.isObstacle) {
-                    // 📱 手機版：障礙物模式 (長在地上，大小隨機)
-                    this.scale = 0.8 + Math.random() * 0.7;
-                    this.width = 40 * this.scale;
-                    this.height = 40 * this.scale;
-                    this.y = groundY - this.height; // 踩在基準線上
-                } else {
-                    // 💻 電腦版：完全保留你原本的邏輯
-                    const bottomArea = canvas.height * 0.12;
-                    this.y = groundY + 5 + Math.random() * (bottomArea - 10);
-                    this.width = 40; 
-                    this.height = 40;
-                }
-
+                const bottomArea = canvas.height * 0.12;
+                this.y = groundY + 5 + Math.random() * (bottomArea - 10);
+                this.width = 40; 
+                this.height = 40;
                 this.speed = 1.2; 
                 this.currentFrame = 0;
                 this.animSpeed = 0.03 + Math.random() * 0.04; 
             }
-
             update() { 
                 if (isWalking) this.x -= this.speed; 
                 this.currentFrame = (this.currentFrame + this.animSpeed) % flowerFrames;
             }
-
             draw() {
                 if (flowerImagesLoaded < flowerFrames) return;
                 ctx.save();
-                
-                if (this.isObstacle) {
-                    // 📱 手機版繪製：直接對準 x, y
-                    ctx.drawImage(flowerImages[Math.floor(this.currentFrame)], this.x, this.y, this.width, this.height);
-                } else {
-                    // 💻 電腦版繪製：完全維持你原本的 x - width / 2 與 y - height
-                    ctx.drawImage(flowerImages[Math.floor(this.currentFrame)], this.x - this.width / 2, this.y - this.height, this.width, this.height);
-                }
-                
+                ctx.drawImage(flowerImages[Math.floor(this.currentFrame)], this.x - this.width / 2, this.y - this.height, this.width, this.height);
                 ctx.restore();
             }
         }
@@ -330,7 +304,7 @@
                 return false; 
             }
         }
-	let flowerSpawnTimer = 0;
+
         function gameLoop() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             const groundY = canvas.height * 0.88; 
@@ -341,21 +315,10 @@
             ctx.stroke();
 
             if (isWalking) {
-                // 💻 電腦版原本的鑽石生成邏輯 (完全沒動)
                 bookTimer++;
                 if (bookTimer > 400 && stories.length > 0) {
                     books.push(new Book(stories[Math.floor(Math.random() * stories.length)]));
                     bookTimer = 0;
-                }
-
-                // 📱 手機版專屬：疊加邏輯
-                // 只要偵測到是手機寬度，就跑另一套計時器長花障礙物
-                if (window.innerWidth <= 768) {
-                    flowerSpawnTimer++;
-                    if (flowerSpawnTimer > 350) { 
-                        flowers.push(new Flower());
-                        flowerSpawnTimer = 0; // 只歸零自己的，不影響 bookTimer
-                    }
                 }
             }
 
@@ -439,20 +402,13 @@
             if (finishCheckbox.checked && currentStory) {
                 readStoryTitles.add(currentStory.title);
                 localStorage.setItem('readStories', JSON.stringify(Array.from(readStoryTitles)));
-                
-                // 🔹 這裡做微調：只有電腦版（寬螢幕）才在關閉時噴花
-                // 手機版（窄螢幕）則靠 gameLoop 的計時器自動生花，避免花朵過多
-                if (window.innerWidth > 768) {
-                    flowers.push(new Flower());
-                }
-
+                flowers.push(new Flower());
                 const currentGroupKey = currentStory.collectionId || currentStory.title.split('：')[0];
                 books = books.filter(b => (b.story.collectionId || b.story.title.split('：')[0]) !== currentGroupKey);
                 bookTimer = 400;
                 loadStories(); 
             }
-            isWalking = true; 
-            readerModal.classList.add('hidden'); 
+            isWalking = true; readerModal.classList.add('hidden'); 
         };
 
 	window.renderArchive = () => {
@@ -541,17 +497,12 @@
             };
             startSeed();
         });
-	window.addEventListener('touchstart', (e) => {
-    // 只有在手機寬度、正在走路、且點擊的是畫布背景時觸發
-    if (window.innerWidth <= 768 && isWalking) {
-        // 排除掉 UI 按鈕，避免誤觸
-        const isButton = e.target.closest('button') || e.target.closest('.writer-trigger');
-        if (!isButton) {
-            if (e.cancelable) e.preventDefault();
-            player.jump();
-        }
+window.addEventListener('touchstart', (e) => {
+    // 只有點擊畫布（而非按鈕）時才觸發跳躍
+    if (e.target.tagName !== 'BUTTON' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA' && isWalking) {
+        player.jump();
     }
-}, { passive: false });
+}, { passive: true });
     </script>
     <style>
         body, html { margin: 0; padding: 0; width: 100vw; height: 100vh; overflow: hidden; background-color: #1a1a1a; font-family: 'Noto Serif TC', serif; }
@@ -568,65 +519,55 @@
         .prompt-btn-read:hover { color: white; border-bottom: 1px solid white; }
         .prompt-btn-skip { color: #52525b; } 
         .prompt-btn-skip:hover { color: #a1a1aa; }
-	@media (max-width: 768px) {
-    /* 1. 存檔面板滿版 */
-    #archivePanel {
-        width: 100% !important;
-        right: -100% !important;
+@media (max-width: 640px) {
+    /* 1. 調整角色與物件比例 */
+    canvas {
+        filter: grayscale(0.5) brightness(0.8) contrast(1.1); /* 手機亮度稍提 */
+    }
+
+    /* 2. 讓 Modal 在手機上更寬、更好讀 */
+    .story-modal {
+        width: 92vw !important; /* 增加寬度佔比 */
+        height: 80vh !important;
+        max-width: none !important;
+    }
+
+    /* 3. 調整 UI 字體與間距，防止過大或過小 */
+    #readerModal p {
+        font-size: 15px !important;
+        line-height: 2 !important;
+    }
+
+    #readerModal h3, #writerModal input {
+        font-size: 18px !important;
+        margin-bottom: 2rem !important;
+    }
+
+    /* 4. 優化提示框的位置 (放高一點以免遮擋角色) */
+    #readPrompt {
+        bottom: auto !important;
+        top: 20% !important;
+        width: 85vw !important;
         padding: 1.5rem !important;
     }
-    #archivePanel:not(.hidden) { right: 0 !important; }
 
-    /* 2. 小說內容/章節清單/寫作介面：整頁貼滿 */
-    #readerModal .story-modal, 
-    #chapterModal .story-modal,
-    #writerModal .story-modal {
+    /* 5. 存檔側欄改為全螢幕，方便單手切換 */
+    #archivePanel {
         width: 100vw !important;
-        height: 100vh !important;
-        max-width: none !important;
-        max-height: none !important;
-        border: none !important;
-        border-radius: 0 !important;
-        display: flex;
-        flex-direction: column; /* 確保按鈕被推到最下方 */
+        right: -100vw !important; /* 起始位置 */
     }
 
-    /* 3. 調整內文區域：確保不遮擋字與按鍵 */
-    #readerModal .p-12, #writerModal .p-12 {
-        padding: 2rem 1.5rem 5rem 1.5rem !important; /* 底部留白，防止被按鈕遮擋 */
-        flex: 1; /* 讓內容區自動撐開 */
-        overflow-y: auto; /* 內容過長時可捲動 */
+    /* 6. 防止 iOS 輸入框自動放大 (設定 16px) */
+    #writeTitle, #writeContent, #writeSource {
+        font-size: 16px !important;
     }
 
-    #readerModal h3 {
-        font-size: 1.3rem !important;
-        margin-bottom: 2rem !important;
-        line-height: 1.4 !important;
-    }
-
-    #readerModal p {
-        font-size: 1.15rem !important; /* 放大內文 */
-        line-height: 1.8 !important;   /* 寬鬆行距 */
-        color: #e4e4e7 !important;
-    }
-
-    /* 4. 固定底部按鈕：確保完整顯示 */
-    #readerModal button, #chapterModal button, #writerModal button {
-        position: relative; /* 改為相對定位，避免懸浮遮擋 */
-        width: 100% !important;
-        padding: 1.25rem 0 !important;
-        font-size: 0.9rem !important;
-        flex-shrink: 0; /* 禁止按鈕被壓縮 */
-        background-color: #000 !important; /* 強化按鈕識別度 */
-    }
-
-    /* 5. 原本的按鈕微調 */
+    /* 7. 加大互動按鈕的觸控範圍 */
     .writer-trigger {
-        width: 35px !important;
-        height: 35px !important;
+        width: 45px !important;
+        height: 45px !important;
         top: 15px !important;
     }
-    .writer-trigger[style*="right: 70px;"] { right: 60px !important; }
 }
     </style>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;700&display=swap" rel="stylesheet">
