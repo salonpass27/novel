@@ -520,65 +520,72 @@ window.addEventListener('touchstart', (e) => {
         .prompt-btn-skip { color: #52525b; } 
         .prompt-btn-skip:hover { color: #a1a1aa; }
 @media (max-width: 640px) {
-    /* 1. 確保背景底色與 Google 外層一致，減少視覺斷層 */
-    body, html {
-        background-color: #1a1a1a !important;
-        height: 100% !important;
-        position: fixed; /* 防止 Google 瀏覽器下拉重新整理的白色彈跳 */
-        overflow: hidden;
-    }
-
-    /* 2. 核心修正：讓 Modal 不要貼到底部，預留空間給 Google 的白色層 */
+    /* 1. 恢復大版面：撐開寬度與高度 */
     .story-modal {
-        width: 94vw !important;
-        height: 85vh !important; /* 縮小一點，不要填滿，防止被蓋住 */
-        max-height: 85vh !important;
-        top: 5vh !important;
-        left: 3vw !important;
+        width: 100vw !important; /* 寬度撐滿 */
+        height: 100vh !important; /* 高度撐滿 */
+        max-width: none !important;
+        max-height: none !important;
+        top: 0 !important;
+        left: 0 !important;
         transform: none !important;
-        box-shadow: 0 0 100px rgba(0,0,0,0.8); /* 增加陰影，區隔外層 */
-        border: 1px solid #444 !important; /* 加強邊框，防止與白色背景融合 */
-        z-index: 300 !important;
+        border: none !important; /* 滿版不需要邊框 */
+        display: flex !important;
+        flex-direction: column !important;
+        border-radius: 0 !important;
     }
 
-    /* 3. 修正按鈕：確保按鈕與螢幕底部保持距離 (Safe Area) */
-    #readerModal button, #writerModal button, #chapterModal button {
-        position: relative !important;
-        bottom: 0 !important;
-        margin-top: auto !important;
-        padding-bottom: calc(1rem + env(safe-area-inset-bottom)) !important; /* 自動避開手機底部橫條 */
-        background: #27272a !important; 
-        color: #fff !important;
-        border-top: 1px solid #444 !important;
+    /* 2. 核心修正：給底部增加一個巨大的「墊高區」 */
+    /* 確保關閉按鈕下方有足夠的空白，不被 Google 的白色層蓋住 */
+    #readerModal button, #writerModal button {
+        height: 80px !important; /* 增加按鈕高度 */
+        padding-bottom: 30px !important; /* 把文字往上推，避開白色遮擋 */
+        background: #27272a !important;
+        font-size: 15px !important;
+        flex-shrink: 0; /* 防止按鈕被內容擠扁 */
     }
 
-    /* 4. 內容區加大，並確保不被底部按鈕蓋住 */
+    /* 3. 內容區：字體要大，且底部要留白（Padding-bottom） */
+    .p-12 {
+        padding: 2rem 1.5rem !important; /* 側邊留白縮小，讓字更寬 */
+    }
+
+    #readerModal p {
+        font-size: 1.2rem !important; /* 字體再加大，閱讀更舒服 */
+        line-height: 2 !important;
+        /* 重要：內容區域底部多留 100px，確保捲動到最後也不會被擋 */
+        padding-bottom: 100px !important; 
+    }
+
+    #readerModal h3 {
+        font-size: 1.5rem !important;
+        margin-top: 2rem !important;
+    }
+
+    /* 4. 讓滾動區域填滿剩餘空間 */
     .novel-scroll {
-        flex: 1;
+        flex-grow: 1 !important;
         overflow-y: auto !important;
-        padding-bottom: 50px !important; /* 在內容最後留白，防止字被按鈕蓋住 */
+        height: auto !important;
     }
 
-    /* 5. 提示框 (Prompt) 改到中間偏上，避開底部的白色遮擋區 */
+    /* 5. 提示框 (Read Prompt) 也要撐大 */
     #readPrompt {
+        top: 0 !important;
         bottom: auto !important;
-        top: 25% !important;
-        transform: translateY(-50%) !important;
-        width: 88vw !important;
-        left: 6vw !important;
-        border: 1px solid #555 !important;
+        left: 0 !important;
+        width: 100vw !important;
+        padding: 2.5rem 1rem !important;
         background: rgba(24, 24, 27, 0.98) !important;
     }
 
-    /* 6. 文字顏色加深，防止在白色背景下看不清 */
-    #readerModal p {
-        color: #e4e4e7 !important; /* 稍微提亮文字 */
+    #readPrompt span {
         font-size: 1.1rem !important;
     }
 
-    /* 7. 修正輸入框：防止點擊時 Google 介面位移 */
-    #writeContent {
-        height: 35vh !important;
+    /* 6. 修正標題與內容輸入框，讓它大一點 */
+    #writeTitle {
+        font-size: 1.5rem !important;
     }
 }
     </style>
