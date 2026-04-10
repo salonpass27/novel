@@ -525,17 +525,21 @@ window.addEventListener('touchstart', (e) => {
 /* --- 手機版：大字、滿版、且避開底部白色區域優化 --- */
 /* --- 手機版：大字、滿版、且避開底部白色區域優化 --- */
 @media (max-width: 640px) {
-    /* 1. 故事視窗大版面 - 維持你喜歡的比例 */
+    /* 1. 故事視窗大版面 - 修正手機置中問題 */
     .story-modal {
         width: 95vw !important;
         height: 90vh !important;
         max-width: none !important;
         max-height: none !important;
         top: 5vh !important;
-        left: 2.5vw !important;
-        transform: none !important;
+        
+        /* 核心置中修正 */
+        left: 50% !important;
+        transform: translateX(-50%) !important;
+        
         display: flex !important;
         flex-direction: column !important;
+        position: fixed !important; /* 確保在手機上定位準確 */
     }
 
     /* 2. 字體加大型 - 維持原樣 */
