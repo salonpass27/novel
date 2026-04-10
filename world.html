@@ -2,7 +2,6 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>寂靜故事廊 - 輸送記憶</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="module">
@@ -589,26 +588,11 @@ window.addEventListener('touchstart', (e) => {
         font-size: 1rem !important;
     }
 
+    /* 8. 修正底部按鈕：讓它夠大，好按 */
     button.w-full {
-        /* 增加總高度，確保按鈕有足夠空間被推上去 */
-        height: 80px !important; 
+        height: 60px !important;
         font-size: 14px !important;
         letter-spacing: 0.2em !important;
-        
-        /* 核心修正：增加底部內距，把「TERMINATE」等字樣往上擠 */
-        /* env(...) 會自動根據不同手機（如 iPhone 底部條）調整高度 */
-        padding-bottom: calc(env(safe-area-inset-bottom) + 15px) !important;
-        
-        /* 確保按鈕不會被壓縮 */
-        flex-shrink: 0 !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-    }
-
-    /* 額外補強：確保捲動內容最後一行不會被按鈕蓋死 */
-    .novel-scroll {
-        padding-bottom: 40px !important;
     }
 }
     </style>
