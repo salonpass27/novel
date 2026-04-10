@@ -499,14 +499,15 @@
             startSeed();
         });
 window.addEventListener('touchstart', (e) => {
-    // 檢查點擊的目標，如果是點到按鈕 (BUTTON) 或輸入框 (INPUT/TEXTAREA)，就不跳躍
+    // 檢查點擊的是否為「寫下記憶」或「閱讀紀錄」按鈕 (或是按鈕內的圖示)
+    const isTrigger = e.target.closest('.writer-trigger');
     const isInteractive = e.target.closest('button') || e.target.closest('input') || e.target.closest('textarea');
     
-    if (!isInteractive && isWalking) {
+    // 如果點擊的是按鈕觸發器，或是 UI 面板內的按鈕，就不要跳跳
+    if (!isTrigger && !isInteractive && isWalking) {
         player.jump();
     }
-}, { passive: true });
-    </script>
+}, { passive: true });    </script>
     <style>
         body, html { margin: 0; padding: 0; width: 100vw; height: 100vh; overflow: hidden; background-color: #1a1a1a; font-family: 'Noto Serif TC', serif; }
         canvas { display: block; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 0; background-color: #666; filter: grayscale(0.6) contrast(1.1) brightness(0.9); }
@@ -615,10 +616,29 @@ window.addEventListener('touchstart', (e) => {
         background: #27272a !important;
     }
 
-    /* 補強：防止側欄存檔點也被蓋住 */
+    /* 修正「閱讀紀錄」面板：寬度與小說視窗一致並置中 */
     #archivePanel {
-        width: 100vw !important;
-        right: -100vw !important;
+        width: 95vw !important;  /* 與小說視窗同寬 */
+        height: 90vh !important; /* 與小說視窗同高 */
+        top: 5vh !important;
+        
+        /* 核心置中修正 */
+        left: 50% !important;
+        right: auto !important; /* 蓋掉電腦版的右側定位 */
+        transform: translateX(-50%) !important;
+        
+        /* 初始狀態設為位移到底部或透明度為0，切換時才顯示 */
+        display: none; /* 初始隱藏，配合 JS toggle */
+        position: fixed !important;
+        background: rgba(24, 24, 27, 0.98) !important;
+        backdrop-filter: blur(10px);
+        border: 1px solid #333;
+        z-index: 150;
+    }
+
+    /* 當面板開啟時 (由 JS 控制 class) */
+    #archivePanel:not(.hidden) {
+        display: block !important;
     }
 }
     </style>
