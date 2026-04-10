@@ -265,24 +265,49 @@
 
         class Flower {
             constructor() {
+                // 🔹 判定是否為手機版
+                const isMobile = window.innerWidth <= 768;
+                this.isObstacle = isMobile;
+
                 this.x = canvas.width + 50;
                 const groundY = canvas.height * 0.88;
-                const bottomArea = canvas.height * 0.12;
-                this.y = groundY + 5 + Math.random() * (bottomArea - 10);
-                this.width = 40; 
-                this.height = 40;
+
+                if (this.isObstacle) {
+                    // 📱 手機版：障礙物模式 (長在地上，大小隨機)
+                    this.scale = 0.8 + Math.random() * 0.7;
+                    this.width = 40 * this.scale;
+                    this.height = 40 * this.scale;
+                    this.y = groundY - this.height; // 踩在基準線上
+                } else {
+                    // 💻 電腦版：完全保留你原本的邏輯
+                    const bottomArea = canvas.height * 0.12;
+                    this.y = groundY + 5 + Math.random() * (bottomArea - 10);
+                    this.width = 40; 
+                    this.height = 40;
+                }
+
                 this.speed = 1.2; 
                 this.currentFrame = 0;
                 this.animSpeed = 0.03 + Math.random() * 0.04; 
             }
+
             update() { 
                 if (isWalking) this.x -= this.speed; 
                 this.currentFrame = (this.currentFrame + this.animSpeed) % flowerFrames;
             }
+
             draw() {
                 if (flowerImagesLoaded < flowerFrames) return;
                 ctx.save();
-                ctx.drawImage(flowerImages[Math.floor(this.currentFrame)], this.x - this.width / 2, this.y - this.height, this.width, this.height);
+                
+                if (this.isObstacle) {
+                    // 📱 手機版繪製：直接對準 x, y
+                    ctx.drawImage(flowerImages[Math.floor(this.currentFrame)], this.x, this.y, this.width, this.height);
+                } else {
+                    // 💻 電腦版繪製：完全維持你原本的 x - width / 2 與 y - height
+                    ctx.drawImage(flowerImages[Math.floor(this.currentFrame)], this.x - this.width / 2, this.y - this.height, this.width, this.height);
+                }
+                
                 ctx.restore();
             }
         }
@@ -305,7 +330,7 @@
                 return false; 
             }
         }
-
+	let flowerSpawnTimer = 0;
         function gameLoop() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             const groundY = canvas.height * 0.88; 
@@ -316,10 +341,21 @@
             ctx.stroke();
 
             if (isWalking) {
+                // 💻 電腦版原本的鑽石生成邏輯 (完全沒動)
                 bookTimer++;
                 if (bookTimer > 400 && stories.length > 0) {
                     books.push(new Book(stories[Math.floor(Math.random() * stories.length)]));
                     bookTimer = 0;
+                }
+
+                // 📱 手機版專屬：疊加邏輯
+                // 只要偵測到是手機寬度，就跑另一套計時器長花障礙物
+                if (window.innerWidth <= 768) {
+                    flowerSpawnTimer++;
+                    if (flowerSpawnTimer > 350) { 
+                        flowers.push(new Flower());
+                        flowerSpawnTimer = 0; // 只歸零自己的，不影響 bookTimer
+                    }
                 }
             }
 
@@ -403,13 +439,20 @@
             if (finishCheckbox.checked && currentStory) {
                 readStoryTitles.add(currentStory.title);
                 localStorage.setItem('readStories', JSON.stringify(Array.from(readStoryTitles)));
-                flowers.push(new Flower());
+                
+                // 🔹 這裡做微調：只有電腦版（寬螢幕）才在關閉時噴花
+                // 手機版（窄螢幕）則靠 gameLoop 的計時器自動生花，避免花朵過多
+                if (window.innerWidth > 768) {
+                    flowers.push(new Flower());
+                }
+
                 const currentGroupKey = currentStory.collectionId || currentStory.title.split('：')[0];
                 books = books.filter(b => (b.story.collectionId || b.story.title.split('：')[0]) !== currentGroupKey);
                 bookTimer = 400;
                 loadStories(); 
             }
-            isWalking = true; readerModal.classList.add('hidden'); 
+            isWalking = true; 
+            readerModal.classList.add('hidden'); 
         };
 
 	window.renderArchive = () => {
