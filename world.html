@@ -2,6 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>寂靜故事廊 - 輸送記憶</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="module">
@@ -194,16 +195,6 @@
             if (player.isGrounded) player.y = player.baseY;
             player.x = canvas.width * 0.2;
         }
-
-	window.addEventListener('touchstart', (e) => {
-	    // 判斷：手機版、走路中、且點擊的是遊戲畫布
-	    if (window.innerWidth <= 768 && isWalking && e.target.id === "worldCanvas") {
-	        // 阻止手機瀏覽器預設的滾動動作，讓跳躍感更紮實
-	        if (e.cancelable) e.preventDefault(); 
-	        player.jump();
-	    }
-	}, { passive: false }); // 改成 false 才能阻擋瀏覽器原生捲動
-
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
 
@@ -274,51 +265,28 @@
         }
 
         class Flower {
-    constructor() {
-        // 🔹 判斷是否為手機版
-        const isMobile = window.innerWidth <= 768;
-        this.isObstacle = isMobile;
-
-        this.x = canvas.width + 50;
-        const groundY = canvas.height * 0.88; // 保持你的 0.88 基準
-
-        if (this.isObstacle) {
-            // 📱 手機版：障礙物模式 (隨機大小，固定長在地上)
-            this.scale = 0.8 + Math.random() * 0.7;
-            this.width = 40 * this.scale;
-            this.height = 40 * this.scale;
-            this.y = groundY - this.height; // 剛好踩在線上
-        } else {
-            // 💻 電腦版：完全照抄你原本的邏輯 (隨機高度，裝飾用)
-            const bottomArea = canvas.height * 0.12;
-            this.y = groundY + 5 + Math.random() * (bottomArea - 10);
-            this.width = 40;
-            this.height = 40;
+            constructor() {
+                this.x = canvas.width + 50;
+                const groundY = canvas.height * 0.88;
+                const bottomArea = canvas.height * 0.12;
+                this.y = groundY + 5 + Math.random() * (bottomArea - 10);
+                this.width = 40; 
+                this.height = 40;
+                this.speed = 1.2; 
+                this.currentFrame = 0;
+                this.animSpeed = 0.03 + Math.random() * 0.04; 
+            }
+            update() { 
+                if (isWalking) this.x -= this.speed; 
+                this.currentFrame = (this.currentFrame + this.animSpeed) % flowerFrames;
+            }
+            draw() {
+                if (flowerImagesLoaded < flowerFrames) return;
+                ctx.save();
+                ctx.drawImage(flowerImages[Math.floor(this.currentFrame)], this.x - this.width / 2, this.y - this.height, this.width, this.height);
+                ctx.restore();
+            }
         }
-
-        this.speed = 1.2;
-        this.currentFrame = 0;
-        this.animSpeed = 0.03 + Math.random() * 0.04;
-    }
-
-    update() {
-        if (isWalking) this.x -= this.speed;
-        this.currentFrame = (this.currentFrame + this.animSpeed) % flowerFrames;
-    }
-
-    draw() {
-        if (flowerImagesLoaded < flowerFrames) return;
-        ctx.save();
-        if (this.isObstacle) {
-            // 📱 手機版繪製方式 (對齊腳下)
-            ctx.drawImage(flowerImages[Math.floor(this.currentFrame)], this.x, this.y, this.width, this.height);
-        } else {
-            // 💻 電腦版繪製方式 (完全維持你原本的 x - width/2 與 y - height)
-            ctx.drawImage(flowerImages[Math.floor(this.currentFrame)], this.x - this.width / 2, this.y - this.height, this.width, this.height);
-        }
-        ctx.restore();
-    }
-}
 
         async function loadStories() {
             const q = query(collection(db, "stories"), limit(100));
@@ -350,17 +318,9 @@
 
             if (isWalking) {
                 bookTimer++;
-                
-                // --- 原本電腦版的鑽石生成 (保持不動) ---
                 if (bookTimer > 400 && stories.length > 0) {
                     books.push(new Book(stories[Math.floor(Math.random() * stories.length)]));
                     bookTimer = 0;
-                }
-
-                // --- 📱 手機版專屬：額外長出花朵障礙物 ---
-                // 使用取餘數 (%) 判定，每 500 幀長一朵，且完全不影響上面的 bookTimer 歸零
-                if (window.innerWidth <= 768 && bookTimer % 500 === 0) {
-                    flowers.push(new Flower());
                 }
             }
 
@@ -555,37 +515,61 @@
         .prompt-btn-read:hover { color: white; border-bottom: 1px solid white; }
         .prompt-btn-skip { color: #52525b; } 
         .prompt-btn-skip:hover { color: #a1a1aa; }
-/* 手機版專屬樣式，不影響電腦版 */
 @media (max-width: 768px) {
+    /* 1. 存檔面板滿版 */
     #archivePanel {
-        width: 100% !important; /* 滿版 */
-        right: -100% !important; /* 隱藏在右側 */
+        width: 100% !important;
+        right: -100% !important;
         padding: 1.5rem !important;
     }
-    /* 當面板打開時的位置 */
-    #archivePanel:not(.hidden) {
-        right: 0 !important;
-    }
+    #archivePanel:not(.hidden) { right: 0 !important; }
     
-    /* 調整手機版按鈕位置，避免擋到其他 UI */
+    /* 2. 所有彈窗 (閱讀/選單/寫作) 變身全螢幕 */
+    #readerModal .story-modal, 
+    #chapterModal .story-modal,
+    #writerModal .story-modal {
+        width: 100vw !important;
+        height: 100vh !important;
+        max-width: none !important;
+        max-height: none !important;
+        border: none !important;
+        border-radius: 0 !important; /* 去掉圓角更貼合螢幕 */
+    }
+
+    /* 3. 小說內文閱讀優化：字要大、行距要開 */
+    #readerModal .p-12 {
+        padding: 2.5rem 1.5rem !important; /* 增加上下間距，左右留白減少壓迫感 */
+    }
+
+    #readerModal h3 {
+        font-size: 1.4rem !important; /* 標題放大 */
+        margin-bottom: 2rem !important;
+        line-height: 1.4 !important;
+    }
+
+    #readerModal p {
+        font-size: 1.15rem !important; /* 🔹 內文放大，手機看才舒服 */
+        line-height: 2 !important;      /* 寬鬆行距，適合長篇閱讀 */
+        color: #e4e4e7 !important;      /* 提高文字亮度降低視覺疲勞 */
+        letter-spacing: 0.05em !important; /* 微調字距增加質感 */
+    }
+
+    /* 4. 底部按鈕優化 */
+    #readerModal button, #chapterModal button, #writerModal button {
+        padding: 1.25rem 0 !important;
+        font-size: 0.9rem !important;
+        border-radius: 0 !important;
+    }
+
+    /* 5. 原本的按鈕與列表微調 */
     .writer-trigger {
         width: 35px !important;
         height: 35px !important;
         top: 15px !important;
     }
-    .writer-trigger[style*="right: 70px;"] {
-        right: 60px !important;
-    }
-
-    /* 調整文字大小讓手機更好閱讀 */
-    #archiveList div {
-        padding: 1rem !important;
-    }
-    #archiveList .text-xs {
-        font-size: 0.875rem !important; /* 稍微放大點，比較好按 */
-    }
-}
-    </style>
+    .writer-trigger[style*="right: 70px;"] { right: 60px !important; }
+    #archiveList .text-xs { font-size: 0.9rem !important; }
+}    </style>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;700&display=swap" rel="stylesheet">
 </head>
 <body>
