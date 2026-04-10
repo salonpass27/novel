@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>寂靜故事廊 - 輸送記憶</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="module">
@@ -77,17 +77,16 @@
 	// 在變數宣告區加入
 	let readingProgress = JSON.parse(localStorage.getItem('readingProgress') || '{}');
 
+	// 切換面板顯示
 	window.toggleArchive = () => {
 	    const panel = document.getElementById('archivePanel');
-	    const isMobile = window.innerWidth <= 768; // 🔹 新增：判斷是否為手機
 	    if (panel.classList.contains('hidden')) {
 	        renderArchive();
 	        panel.classList.remove('hidden');
 	        setTimeout(() => panel.style.right = '0', 10);
 	        isWalking = false;
 	    } else {
-	        // 🔹 修改：手機退回 -100%，電腦維持 -320px
-	        panel.style.right = isMobile ? '-100%' : '-320px';
+	        panel.style.right = '-320px';
 	        setTimeout(() => panel.classList.add('hidden'), 300);
 	        isWalking = true;
 	    }
@@ -499,6 +498,17 @@
             };
             startSeed();
         });
+	window.addEventListener('touchstart', (e) => {
+    // 只有在手機寬度、正在走路、且點擊的是畫布背景時觸發
+    if (window.innerWidth <= 768 && isWalking) {
+        // 排除掉 UI 按鈕，避免誤觸
+        const isButton = e.target.closest('button') || e.target.closest('.writer-trigger');
+        if (!isButton) {
+            if (e.cancelable) e.preventDefault();
+            player.jump();
+        }
+    }
+}, { passive: false });
     </script>
     <style>
         body, html { margin: 0; padding: 0; width: 100vw; height: 100vh; overflow: hidden; background-color: #1a1a1a; font-family: 'Noto Serif TC', serif; }
@@ -515,7 +525,7 @@
         .prompt-btn-read:hover { color: white; border-bottom: 1px solid white; }
         .prompt-btn-skip { color: #52525b; } 
         .prompt-btn-skip:hover { color: #a1a1aa; }
-@media (max-width: 768px) {
+	@media (max-width: 768px) {
     /* 1. 存檔面板滿版 */
     #archivePanel {
         width: 100% !important;
@@ -523,8 +533,8 @@
         padding: 1.5rem !important;
     }
     #archivePanel:not(.hidden) { right: 0 !important; }
-    
-    /* 2. 所有彈窗 (閱讀/選單/寫作) 變身全螢幕 */
+
+    /* 2. 小說內容/章節清單/寫作介面：整頁貼滿 */
     #readerModal .story-modal, 
     #chapterModal .story-modal,
     #writerModal .story-modal {
@@ -533,43 +543,49 @@
         max-width: none !important;
         max-height: none !important;
         border: none !important;
-        border-radius: 0 !important; /* 去掉圓角更貼合螢幕 */
+        border-radius: 0 !important;
+        display: flex;
+        flex-direction: column; /* 確保按鈕被推到最下方 */
     }
 
-    /* 3. 小說內文閱讀優化：字要大、行距要開 */
-    #readerModal .p-12 {
-        padding: 2.5rem 1.5rem !important; /* 增加上下間距，左右留白減少壓迫感 */
+    /* 3. 調整內文區域：確保不遮擋字與按鍵 */
+    #readerModal .p-12, #writerModal .p-12 {
+        padding: 2rem 1.5rem 5rem 1.5rem !important; /* 底部留白，防止被按鈕遮擋 */
+        flex: 1; /* 讓內容區自動撐開 */
+        overflow-y: auto; /* 內容過長時可捲動 */
     }
 
     #readerModal h3 {
-        font-size: 1.4rem !important; /* 標題放大 */
+        font-size: 1.3rem !important;
         margin-bottom: 2rem !important;
         line-height: 1.4 !important;
     }
 
     #readerModal p {
-        font-size: 1.15rem !important; /* 🔹 內文放大，手機看才舒服 */
-        line-height: 2 !important;      /* 寬鬆行距，適合長篇閱讀 */
-        color: #e4e4e7 !important;      /* 提高文字亮度降低視覺疲勞 */
-        letter-spacing: 0.05em !important; /* 微調字距增加質感 */
+        font-size: 1.15rem !important; /* 放大內文 */
+        line-height: 1.8 !important;   /* 寬鬆行距 */
+        color: #e4e4e7 !important;
     }
 
-    /* 4. 底部按鈕優化 */
+    /* 4. 固定底部按鈕：確保完整顯示 */
     #readerModal button, #chapterModal button, #writerModal button {
+        position: relative; /* 改為相對定位，避免懸浮遮擋 */
+        width: 100% !important;
         padding: 1.25rem 0 !important;
         font-size: 0.9rem !important;
-        border-radius: 0 !important;
+        flex-shrink: 0; /* 禁止按鈕被壓縮 */
+        background-color: #000 !important; /* 強化按鈕識別度 */
     }
 
-    /* 5. 原本的按鈕與列表微調 */
+    /* 5. 原本的按鈕微調 */
     .writer-trigger {
         width: 35px !important;
         height: 35px !important;
         top: 15px !important;
     }
     .writer-trigger[style*="right: 70px;"] { right: 60px !important; }
-    #archiveList .text-xs { font-size: 0.9rem !important; }
-}    </style>
+}
+    </style>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;700&display=swap" rel="stylesheet">
 </head>
 <body>
