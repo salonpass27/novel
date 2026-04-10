@@ -499,15 +499,20 @@
             startSeed();
         });
 window.addEventListener('touchstart', (e) => {
-    // 檢查點擊的是否為「寫下記憶」或「閱讀紀錄」按鈕 (或是按鈕內的圖示)
+    // 1. 【第一道保險】如果現在不是走路狀態（坐著讀書或寫字中），絕對不跳
+    if (!isWalking) return;
+
+    // 2. 【第二道保險】判斷點擊的位置
+    // 檢查點擊是否在：右上角圖示 (.writer-trigger) 或 任何 Modal 面板內
+    const isInModal = e.target.closest('.story-modal') || e.target.closest('#archivePanel') || e.target.closest('#readPrompt');
     const isTrigger = e.target.closest('.writer-trigger');
     const isInteractive = e.target.closest('button') || e.target.closest('input') || e.target.closest('textarea');
-    
-    // 如果點擊的是按鈕觸發器，或是 UI 面板內的按鈕，就不要跳跳
-    if (!isTrigger && !isInteractive && isWalking) {
+
+    // 3. 只有當（沒點到面板）且（沒點到觸發圖示）且（沒點到互動元件）才執行跳躍
+    if (!isInModal && !isTrigger && !isInteractive) {
         player.jump();
     }
-}, { passive: true });    </script>
+}, { passive: true });
     <style>
         body, html { margin: 0; padding: 0; width: 100vw; height: 100vh; overflow: hidden; background-color: #1a1a1a; font-family: 'Noto Serif TC', serif; }
         canvas { display: block; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 0; background-color: #666; filter: grayscale(0.6) contrast(1.1) brightness(0.9); }
