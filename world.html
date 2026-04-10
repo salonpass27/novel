@@ -499,20 +499,30 @@
             startSeed();
         });
 window.addEventListener('touchstart', (e) => {
-    // 1. 【第一道保險】如果現在不是走路狀態（坐著讀書或寫字中），絕對不跳
-    if (!isWalking) return;
+    // 1. 取得點擊目標
+    const target = e.target;
 
-    // 2. 【第二道保險】判斷點擊的位置
-    // 檢查點擊是否在：右上角圖示 (.writer-trigger) 或 任何 Modal 面板內
-    const isInModal = e.target.closest('.story-modal') || e.target.closest('#archivePanel') || e.target.closest('#readPrompt');
-    const isTrigger = e.target.closest('.writer-trigger');
-    const isInteractive = e.target.closest('button') || e.target.closest('input') || e.target.closest('textarea');
+    // 2. 隨時檢查：畫面上是否有任何「頁面」正在顯示
+    const isReaderOpen = !readerModal.classList.contains('hidden');
+    const isWriterOpen = !writerModal.classList.contains('hidden');
+    const isArchiveOpen = !document.getElementById('archivePanel').classList.contains('hidden');
+    const isChapterOpen = !document.getElementById('chapterModal').classList.contains('hidden');
 
-    // 3. 只有當（沒點到面板）且（沒點到觸發圖示）且（沒點到互動元件）才執行跳躍
-    if (!isInModal && !isTrigger && !isInteractive) {
+    // 3. 【強制坐下開關】如果以上任何一個頁面開著，強制把走路停掉
+    if (isReaderOpen || isWriterOpen || isArchiveOpen || isChapterOpen) {
+        isWalking = false;
+        return; // 直接結束，絕對不執行後面的跳躍邏輯
+    }
+
+    // 4. 如果沒在看頁面，才判斷要不要跳
+    const isInUI = target.closest('.story-modal') || target.closest('#archivePanel') || target.closest('#readPrompt');
+    const isTrigger = target.closest('.writer-trigger');
+
+    if (isWalking && !isInUI && !isTrigger) {
         player.jump();
     }
 }, { passive: true });
+    </script>
     <style>
         body, html { margin: 0; padding: 0; width: 100vw; height: 100vh; overflow: hidden; background-color: #1a1a1a; font-family: 'Noto Serif TC', serif; }
         canvas { display: block; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 0; background-color: #666; filter: grayscale(0.6) contrast(1.1) brightness(0.9); }
