@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>管理核心 - 記憶整理</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body { background-color: #1a1a1a; color: #d1d1d1; font-family: 'Noto Serif TC', serif; }
+        .admin-card { background-color: #1a1a1a; border: 1px solid #333; transition: all 0.3s; }
+        .admin-card:hover { border-color: #555; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+        .novel-scroll::-webkit-scrollbar { width: 3px; }
+        .novel-scroll::-webkit-scrollbar-thumb { background: #444; }
+        input, textarea { background: transparent; border-bottom: 1px solid #333; color: #eee; }
+        input:focus { outline: none; border-color: #666; }
+        /* 隱藏原生 Checkbox 但保留邏輯 */
+        .custom-check { accent-color: #555; width: 14px; height: 14px; cursor: pointer; }
+    </style>
+</head>
+<body class="p-8 md:p-20">
+    <div id="authOverlay" class="fixed inset-0 bg-[#1a1a1a] z-[999] flex items-center justify-center">
+        <div class="max-w-xs w-full text-center space-y-6 p-8 admin-card">
+            <h2 class="text-xs tracking-[0.3em] text-zinc-500 uppercase">Identity Verification</h2>
+            <p class="text-[10px] text-zinc-600 italic">提示：小花仙</p>
+            <input id="adminKey" type="password" placeholder="ENTER ACCESS KEY" 
+                   class="w-full bg-transparent border-b border-zinc-800 py-3 text-center text-sm tracking-widest focus:outline-none focus:border-zinc-500 transition-all text-white">
+            <button onclick="verifyAccess()" class="text-zinc-500 hover:text-white text-[10px] tracking-[0.4em] uppercase transition-all">Verify / 驗證</button>
+        </div>
+    </div>
+
+    <div class="max-w-6xl mx-auto">
+    <div class="max-w-6xl mx-auto">
+        <header class="mb-16 flex justify-between items-end">
+            <div>
+                <h1 class="text-2xl font-bold tracking-[0.4em] text-zinc-100 uppercase">Archive Management</h1>
+                <p class="text-zinc-600 text-xs mt-2 tracking-widest">記憶管理核心 / 整理流散的章節</p>
+            </div>
+            <a href="world.html" class="text-zinc-500 hover:text-zinc-200 text-xs tracking-widest transition-all">← RETURN TO GALLERY</a>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-12">
+            <div class="lg:col-span-1 space-y-8">
+                <section class="admin-card p-8">
+                    <h2 class="text-xs tracking-[0.3em] text-zinc-500 mb-8 uppercase">Batch Organize / 批量整理</h2>
+                    <div class="space-y-6">
+                        <p class="text-[10px] text-zinc-600 leading-relaxed italic">選取右側的故事，並賦予它們一個共同的「系列名稱」，這將使它們在廊道中歸於同一朵花。</p>
+                        <input id="colName" type="text" placeholder="輸入系列名稱 (如：寂靜故事)" class="w-full py-2 text-sm">
+                        <button onclick="batchUpdateCollection()" class="w-full bg-zinc-800 hover:bg-zinc-100 hover:text-black text-zinc-400 py-3 text-[10px] tracking-[0.3em] font-bold transition-all uppercase">Execute Batch / 執行批量歸檔</button>
+                    </div>
+                </section>
+            </div>
+
+            <div class="lg:col-span-2 admin-card p-8 h-[70vh] flex flex-col">
+                <div class="flex justify-between items-center mb-8">
+                    <h2 class="text-xs tracking-[0.3em] text-zinc-500 uppercase">Existing Memories</h2>
+                    <span id="selectedCount" class="text-[10px] text-zinc-600">Selected: 0</span>
+                </div>
+                <div id="storyList" class="flex-grow overflow-y-auto novel-scroll space-y-4 pr-4">
+                    <p class="text-zinc-700 italic text-xs">正在連線至記憶深處...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, getDocs, doc, updateDoc, deleteDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyAZVX0tmPi58Cwf66KFuUpKScSKmKPHJLc",
+            authDomain: "help-8d111.firebaseapp.com",
+            projectId: "help-8d111",
+            storageBucket: "help-8d111.firebasestorage.app",
+            messagingSenderId: "202864751687",
+            appId: "1:202864751687:web:241023a2e0144590e7ed62"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        let selectedStories = new Set();
+
+        async function loadAdminStories() {
+            const storyList = document.getElementById('storyList');
+            const q = query(collection(db, "stories"), orderBy("createdAt", "desc"));
+            
+            try {
+                const snapshot = await getDocs(q);
+                storyList.innerHTML = '';
+                selectedStories.clear();
+                updateCounter();
+                
+                snapshot.forEach(storyDoc => {
+                    const data = storyDoc.data();
+                    const div = document.createElement('div');
+                    div.className = "flex items-center justify-between border-b border-zinc-900 py-4 group hover:bg-white/[0.02] px-2 transition-all";
+                    
+                    // 顯示目前所屬系列 (如果有的話)
+                    const colTag = data.collectionId ? `<span class="ml-2 text-[9px] bg-zinc-800 text-zinc-500 px-2 py-0.5 rounded italic">${data.collectionId}</span>` : '';
+
+                    div.innerHTML = `
+                        <div class="flex items-center gap-4">
+                            <input type="checkbox" class="custom-check" onchange="toggleSelect('${storyDoc.id}', this.checked)">
+                            <div>
+                                <span class="text-sm text-zinc-300 tracking-wider">${data.title}</span>
+                                ${colTag}
+                                <div class="text-[9px] text-zinc-700 mt-1">${data.source || '無來源'}</div>
+                            </div>
+                        </div>
+                        <div class="opacity-0 group-hover:opacity-100 transition-all">
+                            <button onclick="deleteMemory('${storyDoc.id}')" class="text-[10px] text-zinc-700 hover:text-red-900 tracking-tighter uppercase transition-all">Mute</button>
+                        </div>
+                    `;
+                    storyList.appendChild(div);
+                });
+            } catch (e) {
+                console.error(e);
+                storyList.innerHTML = '<p class="text-red-900 text-xs">讀取失敗</p>';
+            }
+        }
+
+        window.toggleSelect = (id, isChecked) => {
+            if (isChecked) selectedStories.add(id);
+            else selectedStories.delete(id);
+            updateCounter();
+        };
+
+        function updateCounter() {
+            document.getElementById('selectedCount').innerText = `Selected: ${selectedStories.size}`;
+        }
+
+        window.batchUpdateCollection = async () => {
+            const colName = document.getElementById('colName').value.trim();
+            if (selectedStories.size === 0) return alert("請先選取記憶節點");
+            if (!colName) return alert("請輸入系列名稱");
+
+            if(confirm(`將選中的 ${selectedStories.size} 個記憶歸類至「${colName}」？`)) {
+                try {
+                    const promises = Array.from(selectedStories).map(id => 
+                        updateDoc(doc(db, "stories", id), { collectionId: colName })
+                    );
+                    await Promise.all(promises);
+                    alert("批量歸檔完成。");
+                    loadAdminStories();
+                } catch (e) { alert("歸檔失敗"); }
+            }
+        };
+
+        window.deleteMemory = async (id) => {
+            if(confirm("確定要抹除這段記憶嗎？")) {
+                await deleteDoc(doc(db, "stories", id));
+                loadAdminStories();
+            }
+        };
+
+        // 🔹 驗證邏輯
+        window.verifyAccess = () => {
+            const key = document.getElementById('adminKey').value;
+            if (key === '77327732') {
+                const overlay = document.getElementById('authOverlay');
+                overlay.style.opacity = '0';
+                setTimeout(() => {
+                    overlay.classList.add('hidden');
+                    // 密碼正確後才開始載入資料，保護隱私
+                    loadAdminStories();
+                }, 500);
+            } else {
+                alert("權限錯誤：密碼不符");
+                document.getElementById('adminKey').value = '';
+            }
+        };
+
+        // 支援按下 Enter 鍵驗證
+        document.getElementById('adminKey')?.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') verifyAccess();
+        });
+
+        // 🔸 注意：確保這裡原本的 loadAdminStories(); 被移除了，改由 verifyAccess 啟動
+    </script>
+</body>
+</html>

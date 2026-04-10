@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>寂靜故事廊 - 輸送記憶</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, query, limit, getDocs, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyAZVX0tmPi58Cwf66KFuUpKScSKmKPHJLc",
+            authDomain: "help-8d111.firebaseapp.com",
+            projectId: "help-8d111",
+            storageBucket: "help-8d111.firebasestorage.app",
+            messagingSenderId: "202864751687",
+            appId: "1:202864751687:web:241023a2e0144590e7ed62"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        const canvas = document.getElementById("worldCanvas");
+        const ctx = canvas.getContext("2d");
+        const readerModal = document.getElementById("readerModal");
+        const writerModal = document.getElementById("writerModal");
+        const readPrompt = document.getElementById("readPrompt");
+        const finishCheckbox = document.getElementById("finishCheckbox");
+
+        // --- 圖片載入 ---
+        const jumpImages = [];
+        const jumpFrames = 9;
+        let jumpImagesLoaded = 0;
+        for (let i = 1; i <= jumpFrames; i++) {
+            const img = new Image();
+            img.src = `j${i}.png`;
+            img.onload = () => jumpImagesLoaded++;
+            jumpImages.push(img);
+        }
+
+        const flowerImages = [];
+        const flowerFrames = 8;
+        let flowerImagesLoaded = 0;
+        for (let i = 1; i <= flowerFrames; i++) {
+            const img = new Image();
+            img.src = `f${i}.png`;
+            img.onload = () => flowerImagesLoaded++;
+            flowerImages.push(img);
+        }
+
+        let readStoryTitles = new Set(JSON.parse(localStorage.getItem('readStories') || '[]'));
+        const playerImages = [];
+        const totalFrames = 8;
+        let imagesLoaded = 0;
+        for (let i = 1; i <= totalFrames; i++) {
+            const img = new Image();
+            img.src = `${i}.png`;
+            img.onload = () => imagesLoaded++;
+            playerImages.push(img);
+        }
+
+        const sitImg = new Image();
+        sitImg.src = 'sit.png';
+        sitImg.onload = () => imagesLoaded++;
+
+        // --- 遊戲狀態 ---
+        let isWalking = true;
+        let books = [];
+        let flowers = []; 
+        let stories = [];
+        let allMemoryData = [];
+        let bookTimer = 0;
+        let currentStory = null;
+        let currentBookObject = null;
+
+	// 在變數宣告區加入
+	let readingProgress = JSON.parse(localStorage.getItem('readingProgress') || '{}');
+
+	window.toggleArchive = () => {
+	    const panel = document.getElementById('archivePanel');
+	    const isMobile = window.innerWidth <= 768; // 🔹 新增：判斷是否為手機
+	    if (panel.classList.contains('hidden')) {
+	        renderArchive();
+	        panel.classList.remove('hidden');
+	        setTimeout(() => panel.style.right = '0', 10);
+	        isWalking = false;
+	    } else {
+	        // 🔹 修改：手機退回 -100%，電腦維持 -320px
+	        panel.style.right = isMobile ? '-100%' : '-320px';
+	        setTimeout(() => panel.classList.add('hidden'), 300);
+	        isWalking = true;
+	    }
+	};
+
+        // --- Player 物件 ---
+        const player = {
+            x: 0, 
+            y: 0, 
+            baseX: 0,
+            baseY: 0, 
+            width: 100, 
+            height: 100, 
+            currentFrame: 0, 
+            animSpeed: 0.03,
+            vy: 0,
+            vx: 0,
+            gravity: 0.25,
+            jumpPower: -10,
+            isGrounded: true,
+            // 🔹 新增一個計時器，用來確保落地動作 (8/9) 能被看完
+            landingTimer: 0,
+
+            jump: function() {
+                if (this.isGrounded) {
+                    this.x -= 10; 
+                    this.vy = this.jumpPower;
+                    this.vx = 2;
+                    this.isGrounded = false;
+                    this.baseX = this.x;
+                    this.landingTimer = 0; // 起跳時重設
+                }
+            },
+
+            draw: function() {
+                if (imagesLoaded < totalFrames + 1) return;
+
+                // 物理運算 (維持原本設定)
+                this.y += this.vy;
+                this.x += this.vx; 
+
+                if (this.y < this.baseY) {
+                    this.vy += this.gravity;
+                } else {
+                    this.y = this.baseY;
+                    this.vy = 0;
+                    this.vx = 0; 
+                    if (!this.isGrounded) {
+                        this.isGrounded = true;
+                        this.landingTimer = 30; // 🔹 落地瞬間給予約 0.5 秒的緩衝時間顯示 8/9
+                    }
+                }
+
+                // 倒退走邏輯 (維持原本設定)
+                if (this.isGrounded && this.x > canvas.width * 0.2) {
+                    this.x -= 0.5; 
+                    if (this.x < canvas.width * 0.2) this.x = canvas.width * 0.2;
+                }
+
+                // 🔹 繪製邏輯判定
+                // 如果在空中，或是落地計時器還沒跑完，就畫跳躍/落地圖
+                if (!this.isGrounded || this.landingTimer > 0) {
+                    let jIdx = 0;
+                    let drawY = this.y; 
+
+                    if (this.landingTimer > 0) {
+                        // --- 落地後的過渡 (j8 - j9) ---
+                        this.landingTimer--;
+                        if (this.landingTimer > 15) jIdx = 7; // j8
+                        else jIdx = 8; // j9
+                        drawY = this.baseY;
+                    } else {
+                        // --- 起跳與空中 ---
+                        if (this.vy < -8.5) { 
+                            jIdx = 0; drawY = this.baseY; // j1
+                        } else if (this.vy < -7) { 
+                            jIdx = 1; drawY = this.baseY; // j2
+                        } else if (this.vy < -4) jIdx = 2;
+                        else if (this.vy < -1) jIdx = 3;
+                        else if (this.vy < 1)  jIdx = 4;
+                        else if (this.vy < 4)  jIdx = 5;
+                        else jIdx = 6; // j7 會一直撐到 landingTimer 觸發
+                    }
+
+                    if (jumpImagesLoaded === 9) {
+                        ctx.drawImage(jumpImages[jIdx], this.x, drawY, this.width, this.height);
+                    }
+                } else if (isWalking) {
+                    // 走路動畫
+                    this.currentFrame = (this.currentFrame + this.animSpeed) % totalFrames;
+                    ctx.drawImage(playerImages[Math.floor(this.currentFrame)], this.x, this.y, this.width, this.height);
+                } else {
+                    // 坐下
+                    ctx.drawImage(sitImg, this.x, this.y + 15, this.width, this.height);
+                }
+            }
+        };
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            // 🔹 統一基準線為 0.88
+            const groundY = canvas.height * 0.9; 
+            player.baseY = groundY - player.height;
+            if (player.isGrounded) player.y = player.baseY;
+            player.x = canvas.width * 0.2;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') {
+                if (isWalking) player.jump();
+            }
+        });
+
+        // --- 其餘類別與邏輯 ---
+        class Book {
+            constructor(story) {
+                this.x = canvas.width + 100;
+                this.y = player.baseY + 40;
+                this.width = 40; 
+                this.height = 40;
+                this.speed = 1.2; 
+                this.story = story;
+                this.promptShown = false;
+                this.angle = 0;
+                this.pulse = 0;
+                this.style = Math.floor(Math.random() * 5);
+            }
+            update() { 
+                if (isWalking) {
+                    this.x -= this.speed;
+                    this.angle += 0.02;
+                    this.pulse = Math.sin(Date.now() / 500) * 5;
+                }
+            }
+            draw() {
+                ctx.save();
+                ctx.translate(this.x + this.width/2, this.y + this.height/2);
+                ctx.rotate(this.angle);
+                const glowColor = (this.style % 2 === 0) ? "#60a5fa" : "#a78bfa";
+                ctx.shadowBlur = 15 + this.pulse;
+                ctx.shadowColor = glowColor;
+
+                if (this.style === 0) {
+                    ctx.fillStyle = "rgba(96, 165, 250, 0.8)";
+                    ctx.beginPath();
+                    ctx.moveTo(0, -20); ctx.lineTo(15, 0); ctx.lineTo(0, 20); ctx.lineTo(-15, 0);
+                    ctx.closePath(); ctx.fill();
+                    ctx.fillStyle = "white"; ctx.fillRect(-2, -2, 4, 4);
+                } else if (this.style === 1) {
+                    ctx.strokeStyle = "rgba(167, 139, 250, 0.8)";
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(-15, -15, 30, 30);
+                    ctx.fillStyle = "white"; ctx.beginPath(); ctx.arc(0, 0, 5, 0, Math.PI * 2); ctx.fill();
+                } else if (this.style === 2) {
+                    ctx.strokeStyle = "white"; ctx.lineWidth = 1.5;
+                    ctx.strokeRect(-12, -12, 24, 24); ctx.rotate(Math.PI / 4);
+                    ctx.strokeStyle = glowColor; ctx.strokeRect(-12, -12, 24, 24);
+                    ctx.fillStyle = "white"; ctx.fillRect(-2, -2, 4, 4);
+                } else if (this.style === 3) {
+                    ctx.strokeStyle = "rgba(255, 255, 255, 0.6)"; ctx.lineWidth = 2;
+                    ctx.beginPath(); ctx.arc(0, 0, 16, 0, Math.PI * 2); ctx.stroke();
+                    ctx.fillStyle = glowColor; ctx.beginPath(); ctx.arc(0, 0, 6, 0, Math.PI * 2); ctx.fill();
+                    ctx.fillStyle = "white"; ctx.fillRect(-2, -2, 4, 4);
+                } else {
+                    ctx.fillStyle = "rgba(255, 255, 255, 0.7)"; ctx.beginPath();
+                    ctx.moveTo(0, -18); ctx.lineTo(18, 12); ctx.lineTo(-18, 12);
+                    ctx.closePath(); ctx.fill();
+                    ctx.fillStyle = glowColor; ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI * 2); ctx.fill();
+                }
+                ctx.restore();
+            }
+        }
+
+        class Flower {
+            constructor() {
+                this.x = canvas.width + 50;
+                const groundY = canvas.height * 0.88;
+                const bottomArea = canvas.height * 0.12;
+                this.y = groundY + 5 + Math.random() * (bottomArea - 10);
+                this.width = 40; 
+                this.height = 40;
+                this.speed = 1.2; 
+                this.currentFrame = 0;
+                this.animSpeed = 0.03 + Math.random() * 0.04; 
+            }
+            update() { 
+                if (isWalking) this.x -= this.speed; 
+                this.currentFrame = (this.currentFrame + this.animSpeed) % flowerFrames;
+            }
+            draw() {
+                if (flowerImagesLoaded < flowerFrames) return;
+                ctx.save();
+                ctx.drawImage(flowerImages[Math.floor(this.currentFrame)], this.x - this.width / 2, this.y - this.height, this.width, this.height);
+                ctx.restore();
+            }
+        }
+
+        async function loadStories() {
+            const q = query(collection(db, "stories"), limit(100));
+            try {
+                const snapshot = await getDocs(q);
+                allMemoryData = snapshot.docs.map(doc => doc.data());
+                const uniqueGroups = new Map();
+                allMemoryData.forEach(s => {
+                    if (readStoryTitles.has(s.title)) return;
+                    const groupKey = s.collectionId || s.title.split('：')[0];
+                    if (!uniqueGroups.has(groupKey)) uniqueGroups.set(groupKey, s);
+                });
+                stories = Array.from(uniqueGroups.values());
+                return true; // 🔹 只加這一行，告訴外部抓完了
+            } catch (e) { 
+                console.error(e); 
+                return false; 
+            }
+        }
+
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const groundY = canvas.height * 0.88; 
+            ctx.strokeStyle = "rgba(255,255,255,0.1)";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(0, groundY); ctx.lineTo(canvas.width, groundY);
+            ctx.stroke();
+
+            if (isWalking) {
+                bookTimer++;
+                if (bookTimer > 400 && stories.length > 0) {
+                    books.push(new Book(stories[Math.floor(Math.random() * stories.length)]));
+                    bookTimer = 0;
+                }
+            }
+
+            flowers.forEach((flower, index) => {
+                flower.update();
+                flower.draw();
+                if (flower.x < -100) flowers.splice(index, 1);
+            });
+
+            books.forEach((book, index) => {
+                book.update(); book.draw();
+                if (book.x < player.x + 200 && !book.promptShown && isWalking) {
+                    book.promptShown = true;
+                    currentStory = book.story;
+                    currentBookObject = book;
+                    showReadPrompt(currentStory.collectionId || currentStory.title.split('：')[0]);
+                }
+                if (book.x < -100) books.splice(index, 1);
+            });
+
+            player.draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        window.showReadPrompt = (title) => {
+            readPrompt.classList.remove('hidden');
+            readPrompt.querySelector('span').innerText = `檢索到記憶：${title}`;
+        };
+
+        window.acceptRead = async () => {
+            isWalking = false;
+            readPrompt.classList.add('hidden');
+            const groupKey = currentStory.collectionId || currentStory.title.split('：')[0];
+            const chapters = allMemoryData.filter(s => {
+                const sKey = s.collectionId || s.title.split('：')[0];
+                return sKey === groupKey;
+            });
+            const listContainer = document.getElementById('chapterList');
+            document.getElementById('collectionTitle').innerText = groupKey || "Memory Collection";
+            listContainer.innerHTML = '';
+            chapters.sort((a, b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
+            chapters.forEach(ch => {
+                const btn = document.createElement('button');
+                btn.className = "w-full text-left p-4 border border-zinc-900 hover:border-zinc-500 hover:bg-zinc-800/50 text-zinc-400 text-xs tracking-widest transition-all mb-2 font-serif";
+                btn.innerText = ch.title;
+                btn.onclick = () => openActualStory(ch);
+                listContainer.appendChild(btn);
+            });
+            document.getElementById('chapterModal').classList.remove('hidden');
+        };
+
+        window.openActualStory = (story) => {
+            document.getElementById('chapterModal').classList.add('hidden');
+            readerModal.classList.remove('hidden');
+            readerModal.querySelector('h3').innerText = story.title;
+            readerModal.querySelector('p').innerText = story.content;
+            const sourceDisplay = document.getElementById('displaySource');
+            if (story.source) {
+                sourceDisplay.innerHTML = `來源：<a href="${story.source}" target="_blank" class="underline text-blue-400">${story.source}</a>`;
+                sourceDisplay.classList.remove('hidden');
+            } else { sourceDisplay.classList.add('hidden'); }
+            finishCheckbox.checked = false;
+            currentStory = story; 
+
+            // --- 以下是新增的存檔紀錄邏輯，完全不影響上方 UI 運作 ---
+            const groupKey = story.collectionId || story.title.split('：')[0] || "未命名系列";
+            readingProgress[groupKey] = {
+                title: story.title,
+                timestamp: Date.now(),
+                data: story
+            };
+            const keys = Object.keys(readingProgress).sort((a, b) => readingProgress[b].timestamp - readingProgress[a].timestamp);
+            if (keys.length > 10) delete readingProgress[keys[10]];
+            localStorage.setItem('readingProgress', JSON.stringify(readingProgress));
+            // --- 存檔結束 ---
+        };
+
+        window.closeChapters = () => { document.getElementById('chapterModal').classList.add('hidden'); isWalking = true; };
+        window.declineRead = () => { readPrompt.classList.add('hidden'); books = books.filter(b => b !== currentBookObject); isWalking = true; };
+        window.closeReader = () => {
+            if (finishCheckbox.checked && currentStory) {
+                readStoryTitles.add(currentStory.title);
+                localStorage.setItem('readStories', JSON.stringify(Array.from(readStoryTitles)));
+                flowers.push(new Flower());
+                const currentGroupKey = currentStory.collectionId || currentStory.title.split('：')[0];
+                books = books.filter(b => (b.story.collectionId || b.story.title.split('：')[0]) !== currentGroupKey);
+                bookTimer = 400;
+                loadStories(); 
+            }
+            isWalking = true; readerModal.classList.add('hidden'); 
+        };
+
+	window.renderArchive = () => {
+	    const list = document.getElementById('archiveList');
+	    list.innerHTML = '';
+    
+	    const sortedKeys = Object.keys(readingProgress).sort((a, b) => readingProgress[b].timestamp - readingProgress[a].timestamp);
+    
+	    if (sortedKeys.length === 0) {
+	        list.innerHTML = '<div class="text-zinc-700 text-[10px] tracking-widest text-center mt-20">目前尚無存檔紀錄</div>';
+	        return;
+	    }
+
+	    sortedKeys.forEach(key => {
+	        const item = readingProgress[key];
+	        const div = document.createElement('div');
+	        div.className = "group border border-zinc-900 p-4 hover:border-zinc-600 transition-all cursor-pointer bg-zinc-900/20";
+	        div.innerHTML = `
+	            <div class="text-[10px] text-zinc-600 tracking-widest mb-1 uppercase">${key}</div>
+	            <div class="text-xs text-zinc-400 group-hover:text-zinc-200 transition-colors">${item.title}</div>
+	        `;
+	        div.onclick = () => {
+	            toggleArchive();
+	            openActualStory(item.data);
+	        };
+	        list.appendChild(div);
+	    });
+	};
+
+        window.openWriter = () => { isWalking = false; writerModal.classList.remove('hidden'); };
+        window.closeWriter = () => { isWalking = true; writerModal.classList.add('hidden'); };
+        window.submitStory = async () => {
+            const title = document.getElementById('writeTitle').value.trim();
+            const content = document.getElementById('writeContent').value.trim();
+            const source = document.getElementById('writeSource').value.trim();
+            if (!title || !content) return alert("請輸入完整訊息");
+            try {
+                await addDoc(collection(db, "stories"), { title, content, source, createdAt: serverTimestamp() });
+                flowers.push(new Flower()); alert("記憶已封存。");
+                closeWriter(); loadStories(); 
+            } catch (e) { alert("錯誤"); }
+        };
+
+        // 🔹 獨立計時器：移到 loadStories 外面，確保 100% 會執行
+        let isStarted = false; 
+        setTimeout(() => {
+            if (!isStarted) {
+                const retryBtn = document.getElementById("retryBtn");
+                const loadingSub = document.getElementById("loadingSub");
+                if (retryBtn) {
+                    retryBtn.classList.remove('hidden'); 
+                    retryBtn.style.setProperty('display', 'block', 'important');
+                }
+                if (loadingSub) {
+                    loadingSub.innerText = "傳輸通道擁擠，建議重新檢索。";
+                }
+            }
+        }, 10000); 
+
+        loadStories().then(() => {
+            const startSeed = () => {
+                // 🔹 檢查：圖片載入
+                if (flowerImagesLoaded < flowerFrames || imagesLoaded < totalFrames + 1) { 
+                    setTimeout(startSeed, 100); 
+                    return; 
+                }
+
+                if (isStarted) return; 
+                isStarted = true; 
+
+                // 隱藏讀取畫面
+                const overlay = document.getElementById("loadingOverlay");
+                if (overlay) {
+                    overlay.style.opacity = "0";
+                    setTimeout(() => overlay.style.display = "none", 800);
+                }
+
+                const readCount = readStoryTitles.size; 
+                for (let i = 0; i < readCount; i++) {
+                    const f = new Flower();
+                    f.x = Math.random() * canvas.width; 
+                    flowers.push(f);
+                }
+                if (typeof refreshGems === "function") refreshGems();
+                gameLoop();
+            };
+            startSeed();
+        });
+    </script>
+    <style>
+        body, html { margin: 0; padding: 0; width: 100vw; height: 100vh; overflow: hidden; background-color: #1a1a1a; font-family: 'Noto Serif TC', serif; }
+        canvas { display: block; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 0; background-color: #666; filter: grayscale(0.6) contrast(1.1) brightness(0.9); }
+        .story-modal { background-color: #1a1a1a; border: 1px solid #333; color: #d1d1d1; box-shadow: 0 0 50px rgba(0,0,0,1); z-index: 101; }
+        .novel-scroll::-webkit-scrollbar { width: 3px; }
+        .novel-scroll::-webkit-scrollbar-thumb { background: #444; }
+        .fade-in { animation: fadeIn 0.5s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .writer-trigger { position: fixed; top: 20px; right: 20px; width: 40px; height: 40px; background: rgba(255,255,255,0.05); border-radius: 50%; cursor: pointer; z-index: 50; display: flex; align-items: center; justify-content: center; transition: all 0.3s; }
+        .writer-trigger:hover { background: rgba(255,255,255,0.2); box-shadow: 0 0 15px rgba(255,255,255,0.3); }
+        .prompt-btn { transition: all 0.2s; position: relative; }
+        .prompt-btn-read { color: #f4f4f5; } 
+        .prompt-btn-read:hover { color: white; border-bottom: 1px solid white; }
+        .prompt-btn-skip { color: #52525b; } 
+        .prompt-btn-skip:hover { color: #a1a1aa; }
+/* 手機版專屬樣式，不影響電腦版 */
+@media (max-width: 768px) {
+    #archivePanel {
+        width: 100% !important; /* 滿版 */
+        right: -100% !important; /* 隱藏在右側 */
+        padding: 1.5rem !important;
+    }
+    /* 當面板打開時的位置 */
+    #archivePanel:not(.hidden) {
+        right: 0 !important;
+    }
+    
+    /* 調整手機版按鈕位置，避免擋到其他 UI */
+    .writer-trigger {
+        width: 35px !important;
+        height: 35px !important;
+        top: 15px !important;
+    }
+    .writer-trigger[style*="right: 70px;"] {
+        right: 60px !important;
+    }
+
+    /* 調整文字大小讓手機更好閱讀 */
+    #archiveList div {
+        padding: 1rem !important;
+    }
+    #archiveList .text-xs {
+        font-size: 0.875rem !important; /* 稍微放大點，比較好按 */
+    }
+}
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="loadingOverlay" class="fixed inset-0 bg-zinc-950 z-[200] flex flex-col items-center justify-center transition-opacity duration-1000">
+    <div class="text-zinc-500 tracking-[0.5em] text-xs mb-4 animate-pulse uppercase"> - MEMORIES LOADING - </div>
+    <div id="loadingSub" class="text-zinc-700 text-[10px] tracking-widest font-serif">記憶檢索中，請稍後...</div>
+    
+    <button id="retryBtn" onclick="window.location.reload()" style="display:none;" class="mt-8 px-6 py-2 border border-zinc-800 text-zinc-600 text-[10px] tracking-widest hover:text-white hover:border-zinc-500 transition-all font-serif">
+        RETRY
+    </button>
+</div>
+    <div class="writer-trigger" title="寫下記憶" onclick="openWriter()">
+        <span class="text-white text-xs opacity-50">+</span>
+    </div>
+<div class="writer-trigger" style="right: 70px;" title="閱讀紀錄" onclick="toggleArchive()">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="opacity-40">
+        <path d="M4 19.5C4 18.1193 5.11929 17 6.5 17H20" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+        <path d="M6.5 2H20V22H6.5C5.11929 22 4 20.8807 4 19.5V4.5C4 3.11929 5.11929 2 6.5 2Z" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M8 6H16" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+        <path d="M8 10H16" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+</div>
+<div id="archivePanel" class="fixed top-0 right-[-320px] w-[300px] h-full bg-zinc-950/95 border-l border-zinc-800 z-[150] transition-all duration-300 p-8 shadow-2xl hidden">
+    <div class="flex justify-between items-center mb-8">
+        <span class="text-[10px] tracking-[0.5em] text-zinc-500 uppercase">Archive / 存檔點</span>
+        <button onclick="toggleArchive()" class="text-zinc-600 hover:text-white text-xl">&times;</button>
+    </div>
+    <div id="archiveList" class="novel-scroll overflow-y-auto h-[80vh] space-y-4">
+        </div>
+</div>
+    <canvas id="worldCanvas"></canvas>
+    <div id="readPrompt" class="fixed bottom-24 left-1/2 -translate-x-1/2 bg-zinc-900 px-10 py-6 shadow-2xl border border-zinc-800 hidden text-center z-[60] fade-in">
+        <span class="block text-zinc-400 font-bold mb-5 tracking-[0.2em] text-sm italic"></span>
+        <div class="flex gap-12 justify-center">
+            <button onclick="acceptRead()" class="prompt-btn prompt-btn-read font-bold text-xs">讀取</button>
+            <button onclick="declineRead()" class="prompt-btn prompt-btn-skip font-bold text-xs">跳過</button>
+        </div>
+    </div>
+    <div id="chapterModal" class="fixed inset-0 bg-black/95 flex items-center justify-center z-[110] p-6 hidden">
+        <div class="story-modal w-full max-w-md h-[60vh] flex flex-col relative fade-in">
+            <div class="p-8 flex-grow overflow-hidden flex flex-col">
+                <h3 id="collectionTitle" class="text-sm font-bold mb-8 text-center text-zinc-500 tracking-[0.3em] uppercase underline decoration-zinc-800">Memory Chapters</h3>
+                <div id="chapterList" class="novel-scroll overflow-y-auto space-y-2"></div>
+            </div>
+            <button onclick="closeChapters()" class="w-full bg-zinc-900 text-zinc-600 py-4 text-[10px] tracking-[0.3em] hover:text-white transition-all">BACK / 返回</button>
+        </div>
+    </div>
+    <div id="readerModal" class="fixed inset-0 bg-black/90 flex items-center justify-center z-[100] p-6 hidden">
+        <div class="story-modal w-full max-w-xl h-[85vh] flex flex-col relative fade-in">
+            <div class="p-12 novel-scroll overflow-y-auto flex-grow">
+                <h3 class="text-xl font-bold mb-12 text-center text-zinc-100 tracking-[0.3em]"></h3>
+                <p class="text-md leading-[2.2] whitespace-pre-line text-zinc-400 font-serif"></p>
+                <div id="displaySource" class="mt-10 text-xs italic text-zinc-600"></div>
+                <div class="mt-20 pt-10 border-t border-zinc-800">
+                    <div class="flex items-center gap-3 justify-center text-zinc-600">
+                        <input type="checkbox" id="finishCheckbox" class="w-3 h-3 accent-zinc-500 bg-transparent border-zinc-700">
+                        <label for="finishCheckbox" class="text-[10px] tracking-widest cursor-pointer uppercase">Mark as Processed / 已處理</label>
+                    </div>
+                </div>
+            </div>
+            <button onclick="closeReader()" class="w-full bg-zinc-800 text-zinc-400 py-5 text-xs font-bold tracking-[0.5em] hover:bg-black hover:text-white transition-all">TERMINATE / 結束讀取</button>
+        </div>
+    </div>
+    <div id="writerModal" class="fixed inset-0 bg-black/95 flex items-center justify-center z-[100] p-6 hidden">
+        <div class="story-modal w-full max-w-xl h-[85vh] flex flex-col relative fade-in">
+            <div class="p-12 novel-scroll overflow-y-auto flex-grow">
+                <div class="flex justify-between items-center mb-10">
+                    <span class="text-[10px] tracking-[0.5em] text-zinc-600 uppercase">Input Memory Stream</span>
+                    <button onclick="closeWriter()" class="text-zinc-600 hover:text-white">&times;</button>
+                </div>
+                <input id="writeTitle" type="text" placeholder="標題" class="w-full bg-transparent border-b border-zinc-800 py-4 text-lg mb-10 focus:outline-none focus:border-zinc-500 transition-all text-zinc-200">
+                <textarea id="writeContent" placeholder="內容..." class="w-full bg-transparent h-80 resize-none leading-loose focus:outline-none text-zinc-400 text-md"></textarea>
+                <input id="writeSource" type="text" placeholder="來源連結" class="w-full bg-transparent border-b border-zinc-900 py-2 text-xs focus:outline-none text-zinc-600 mt-6 italic">
+            </div>
+            <button onclick="submitStory()" class="w-full bg-zinc-800 text-zinc-100 py-5 text-xs font-bold tracking-[0.5em] hover:bg-white hover:text-black transition-all">EXECUTE / 執行封存</button>
+        </div>
+    </div>
+</body>
+</html>
